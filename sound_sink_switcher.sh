@@ -1,14 +1,14 @@
 #!/bin/bash
-# Author: Ruben Lopez (Logon84) <rubenlogon@yahoo.es>
+# Author: Ruben Lopez (Logon84) <rubenlogon@yahoo.es> <- cool guy, I'm grateful
 # Description: A shell script to switch pipewire sinks (outputs).
 
 # Add sink names (separated with '|') to SKIP while switching with this script. Choose names to skip from the output of this command:
 # wpctl status -n | grep -zoP '(?<=Sinks:)(?s).*?(?=├─)' | grep -a "vol:"
 # if no skip names are added, this script will switch between every available audio sink (output).
-SINKS_TO_SKIP=("other_sink_name1|other_sink_name2|other_sink_name3")
+SINKS_TO_SKIP=("other_sink_name1|other_sink_name2")
 
 #Define Aliases (OPTIONAL)
-ALIASES="sink_name1:ALIAS1\nsink_name2:ALIAS2"
+ALIASES="alsa_output.usb-Jieli_Technology_EDIFIER_Hal0_2.0_SE_4250315A34383502-00.analog-stereo:Edifier QR30 USB\nalsa_output.usb-Logitech_USB_Headset_Logitech_USB_Headset-00.analog-stereo:Logitech H390\nalsa_output.pci-0000_06_00.1.hdmi-stereo:HDMI\nalsa_output.pci-0000_06_00.6.analog-stereo:Laptop Speaker"
 
 #Create array of sink names to switch to
 declare -a SINKS_TO_SWITCH=($(wpctl status -n | grep -zoP '(?<=Sinks:)(?s).*?(?=├─)' | grep -a "vol:" | tr -d \* | awk '{print ($3)}' | grep -Ev $SINKS_TO_SKIP))
@@ -25,6 +25,8 @@ NEXT_SINK_ID=$(wpctl status -n | grep -zoP '(?<=Sinks:)(?s).*?(?=├─)' | grep
 
 #Switch to sink & notify
 wpctl set-default $NEXT_SINK_ID
+
+
 out=$(gdbus call --session \
              --dest org.freedesktop.Notifications \
              --object-path /org/freedesktop/Notifications \
@@ -34,10 +36,23 @@ ALIAS=$(echo -e $ALIASES | grep $NEXT_SINK_NAME | awk -F ':' '{print ($2)}')
 out=$(gdbus call --session \
              --dest org.freedesktop.Notifications \
              --object-path /org/freedesktop/Notifications \
-             --method org.freedesktop.Notifications.Notify sss \
-             0 \
-             gtk-dialog-info "Sound Sink Switcher" "Switching to $NEXT_SINK_ID : $NEXT_SINK_NAME ($ALIAS)" [] {} 5000 | \
-             sed 's/(uint32 \([0-9]\+\),)/\1/g' > /tmp/sss.id)
+             --method org.freedesktop.Notifications.Notify \
+             'Sound Sink Switcher' 0 audio-volume-high \
+             "Switching to $ALIAS" "$NEXT_SINK_ID : $NEXT_SINK_NAME" [] \
+             "{'transient': <true>}" 1000 \
+             | sed 's/(uint32 \([0-9]\+\),)/\1/g' > /tmp/sss.id)
+             
+
+# Wait 1 second
+sleep 1
+
+# Close notification manually
+out=$(gdbus call --session \
+             --dest org.freedesktop.Notifications \
+             --object-path /org/freedesktop/Notifications \
+             --method org.freedesktop.Notifications.CloseNotification \
+             "$(cat /tmp/sss.id 2>/dev/null)" 2>/dev/null)
+
 
 #Replace notification icon (optional and only if you use commandLauncher@scollins cinnamon widget)
 #ICONS="alsa_output.pci-0000_00_03.0.pro-output-3:/usr/share/icons/Adwaita/symbolic/status/amp_stereo_system.png\nalsa_output.pci-0000_00_1b.0.pro-output-0:audio-headphones"
